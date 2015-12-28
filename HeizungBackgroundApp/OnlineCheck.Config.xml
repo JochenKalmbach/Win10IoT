@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<OnlineCheckConfig xmlns="http://schemas.datacontract.org/2004/07/HeizungBackgroundApp" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Entries>
+    <OnlineCheckConfigEntry>
+      <FileNamePattern>{0:yyyy-MM-dd}.txt</FileNamePattern>
+      <Folder>SamsungTv</Folder>
+      <LogPattern>{0:HH:mm:ss}</LogPattern>
+      <Url>http://192.168.0.54/</Url>
+      <WaitTimeInSec>30</WaitTimeInSec>
+    </OnlineCheckConfigEntry>
+  </Entries>
+</OnlineCheckConfig>

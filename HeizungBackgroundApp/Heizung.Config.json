@@ -1,0 +1,113 @@
+{
+  "Description":  "Vitoladens 300-C",
+  "IntervallInSec": 10,
+  "Folder": "Heizung",
+  "FileNamePattern": "{0:yyyy-MM-dd}.txt",
+  "Values": [
+    {
+      "Text": "Aussentemperatur",
+      "Address": "0x5525",
+      "Chart": "main"
+    },
+    {
+      "Text": "Solar: Kollektortemperatur",
+      "Address": "0x6564",
+      "Chart": "main"
+    },
+    {
+      "Text": "Solar: Wärmemenge (kWh)",
+      "Address": "0x6560",
+      "Len": 4,
+      "DecPlaces": 0
+    },
+    {
+      "Text": "Solar: Pumpe (h)",
+      "Address": "0x6568",
+      "DecPlaces": 0
+    },
+    {
+      "Text": "Solar: Speichertemperatur (Warmwasser-Solar)",
+      "Address": "0x6566",
+      "Chart": "main"
+    },
+    {
+      "Text": "Solar: Nachladeunterdrückung",
+      "Address": "0x6551",
+      "Len": 1,
+      "DecPlaces": 0
+    },
+    {
+      "Text": "Solar: Pumpe an",
+      "Address": "0x6552",
+      "Len": 1,
+      "DecPlaces": 0,
+      "Chart": "main",
+      "ChartY": "secondary"
+    },
+    {
+      "Text": "Kesseltemperatur",
+      "Address": "0x0810",
+      "Chart": "main"
+    },
+    {
+      "Text": "Warmwasser",
+      "Address": "0x0812",
+      "Chart": "main"
+    },
+    {
+      "Text": "Vorlauf HK2",
+      "Address": "0x3900",
+      "Chart": "main"
+    },
+    {
+      "Text": "Brenner: Starts",
+      "Address": "0x088A",
+      "DecPlaces": 0,
+      "Len": 4
+    },
+    {
+      "Text": "Brenner: Stufe 1 (h)",
+      "Address": "0x08A7",
+      "Len": 4,
+      "Format": "hhmmss"
+    },
+    {
+      "Text": "Brenner: Stufe 2 (h)",
+      "Address": "0x08AB",
+      "Len": 4,
+      "Format": "hhmmss"
+    },
+    {
+      "Text": "Brenner",
+      "Address": "0x55DE",
+      "DecPlaces": 0,
+      "Len": 1,
+      "Chart": "main",
+      "ChartY": "secondary"
+    },
+    {
+      "Text": "Heizkreispumpe (HK1)",
+      "Address": "0x2906",
+      "DecPlaces": 0,
+      "Len": 1,
+      "Chart": "main",
+      "ChartY": "secondary"
+    },
+    {
+      "Text": "Zirkulationspumpe",
+      "Address": "0x6515",
+      "DecPlaces": 0,
+      "Len": 1,
+      "Chart": "main",
+      "ChartY": "secondary"
+    },
+    {
+      "Text": "Heizkreispumpe (HK2)",
+      "Address": "0x3906",
+      "DecPlaces": 0,
+      "Len": 1,
+      "Chart": "main",
+      "ChartY": "secondary"
+    }
+  ]
+}
