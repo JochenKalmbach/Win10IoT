@@ -190,29 +190,15 @@ namespace LightBuzz.SMTP
 
             StringBuilder message = new StringBuilder();
 
-            message.AppendFormat("Date: {0}{1}", DateTime.Now.ToString(DATE_FORMAT), System.Environment.NewLine);
-            message.AppendFormat("X-Priority: {0}{1}", ((byte)Priority).ToString(), System.Environment.NewLine);
-            message.AppendFormat("From: \"{0}\"<{1}>{2}", From.Name,From.EmailAddress, System.Environment.NewLine);
+            message.AppendFormat("Date: {0}{1}", DateTime.UtcNow.ToString(DATE_FORMAT, CultureInfo.InvariantCulture), System.Environment.NewLine);
+            message.AppendFormat("X-Priority: {0}{1}", ((byte)Priority).ToString(CultureInfo.InvariantCulture), System.Environment.NewLine);
+            message.AppendFormat("From: {0}{1}", ToHeaderText(From), System.Environment.NewLine);
 
-            message.Append("To: ");
+            message.AppendFormat("To: {0}{1}", ToHeaderText(To), Environment.NewLine);
 
-            for (int i = 0; i < To.Count; i++)
-            {
-                MailBox to = To[i];
-                string separator = i == To.Count - 1 ? Environment.NewLine : ", ";
+            if (Cc.Count > 0) message.AppendFormat("Cc: {0}{1}", ToHeaderText(Cc), Environment.NewLine);
 
-                message.AppendFormat("\"{0}\"<{1}>{2}", to.Name,to.EmailAddress, separator);
-            }
-            if (Cc.Count>0) message.Append("Cc: ");
-            for (int i = 0; i < Cc.Count; i++)
-            {
-                MailBox cc = Cc[i];
-                string separator = i == Cc.Count - 1 ? Environment.NewLine : ", ";
-
-                message.AppendFormat("\"{0}\"<{1}>{2}", cc.Name,cc.EmailAddress, separator);
-            }
-            if (Cc.Count > 0) message.AppendFormat("{0}", Environment.NewLine);
-            message.AppendFormat("Subject: {0}{1}", Subject, Environment.NewLine);
+            message.AppendFormat("Subject: {0}{1}", EncodeHeaderText(Subject), Environment.NewLine);
             message.AppendFormat("MIME-Version: 1.0{0}", Environment.NewLine);
             if (HasAttachments)
             {
@@ -226,8 +212,7 @@ namespace LightBuzz.SMTP
             }
             else
             {
-                message.AppendFormat("Content-Type: text/plain; charset=\"{0}\"{1}", Encoding.WebName, System.Environment.NewLine);
-
+                message.AppendFormat("Content-Type: text/plain; charset=\"{0}\"{1}", Encoding.WebName, Environment.NewLine);
             }
 
             message.Append(Environment.NewLine);
@@ -295,6 +280,62 @@ namespace LightBuzz.SMTP
             string fileName= filePath.Substring(position+1, filePath.Length - position -1);
             return fileName;
         }
+
+        /// <summary>
+        /// Method for translating a <see cref="MailBox"/> int a header string
+        /// </summary>
+        /// <param name=""></param>
+        /// <returns></returns>
+        private static string ToHeaderText(MailBox mailbox)
+        {
+            return ToHeaderText(new[] { mailbox });
+        }
+        private static string ToHeaderText(IEnumerable<MailBox> mailboxes)
+        {
+            var sb = new StringBuilder();
+            foreach (MailBox mb in mailboxes)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(", ");
+                }
+                if (string.IsNullOrEmpty(mb.Name))
+                {
+                    sb.Append(mb.EmailAddress);
+                }
+                else
+                {
+                    sb.AppendFormat("\"{0}\"<{1}>", mb.Name, mb.EmailAddress);
+                }
+            }
+            return EncodeHeaderText(sb.ToString());
+        }
+
+        private static string EncodeHeaderText(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+
+            // First try: Search if the test does contain non-ASCII characters:
+            bool onlyAscii = true;
+            foreach (var c in text)
+            {
+                if (c > 0x7F)
+                {
+                    onlyAscii = false;
+                    break;
+                }
+            }
+            if (onlyAscii) return text;
+
+            // There are non-ASCII characters... so encode it...
+
+            // Encode with utf8 / base64:
+            Encoding enc = Encoding.UTF8;
+            text = Convert.ToBase64String(enc.GetBytes(text));
+            return string.Format("=?{0}?B?{1}?=", enc.WebName, text);  // Normally we should use "HeaderName" property, but this is not available in CoreCLR
+        }
+
         /// <summary>
         /// Inizialization of the message
         /// </summary>
