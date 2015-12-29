@@ -9,4 +9,6 @@ http://blog.kalmbach-software.de/2015/12/28/first-experience-with-win10-iot-and-
 
 The program monitors the Viessmann heating unit and stored configured values into a text file. You can spcify hi/lo-limits, if this gets reached, it will send an mail.
 
-Also monitors HTTP servers and stored the reachability in a file
+## Monitors HTTP servers
+
+The program monitors HTTP servers and stored the reachability in a file.
