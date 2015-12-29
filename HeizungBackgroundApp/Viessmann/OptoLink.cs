@@ -28,6 +28,7 @@ namespace HeizungBackgroundApp.Viessmann
             var cfg = await LoadConfigAsync();
 
             var sw = Stopwatch.StartNew();
+            var swInner = Stopwatch.StartNew();
             //await WaitForFirst
             while (cancel.IsCancellationRequested == false)
             {
@@ -47,6 +48,7 @@ namespace HeizungBackgroundApp.Viessmann
                             port.ReadTimeout = new TimeSpan(0, 0, 0, 0, 500);  // 500 ms
 
                             sw.Restart();
+                            swInner.Restart();
                             DateTime dt = DateTime.Now;
                             var sb = new StringBuilder();
                             sb.AppendFormat(System.Globalization.CultureInfo.InvariantCulture, "{0:HH:mm:ss}", dt);
@@ -61,6 +63,13 @@ namespace HeizungBackgroundApp.Viessmann
                                 // Info: Do not wait for the sending of the e-mail...
                                 Task t = CheckAlarm(cfg, ce, val);
 
+                                // When using the KW protocol, we must not wait longer than about 750-950 ms... then we must first wait for the next 0x05...
+                                if (swInner.ElapsedMilliseconds > 750)
+                                {
+                                    _Logger.Debug("... interrupting: waiting for next 0x05...");
+                                    await WaitFor0x05Async(port, cancel);
+                                    swInner.Restart();
+                                }
                                 if (sw.ElapsedMilliseconds > 5000)
                                 {
                                     // if the delay was too much, then discad this data...
@@ -165,9 +174,6 @@ namespace HeizungBackgroundApp.Viessmann
             data[1] = (byte)((addr >> 8) & 0xFF);
             data[2] = (byte)((addr) & 0xFF);
             data[3] = (byte)((len) & 0xFF);
-            //_Port.DiscardOutBuffer();
-            //_Port.DiscardInBuffer();
-            //_Port.Write(data, 0, data.Length);
             await port.OutputStream.WriteAsync(data.AsBuffer());
             //await port.OutputStream.FlushAsync();  // NotSuportedException
 
@@ -176,12 +182,7 @@ namespace HeizungBackgroundApp.Viessmann
 
             // Now read the data:
             byte[] readData = new byte[len];
-            //int bytesRead = 0;
-            //do
-            //{
-                await port.InputStream.ReadAsync(readData.AsBuffer(), (uint) len, InputStreamOptions.None);
-                //bytesRead += _Port.Read(readData, bytesRead, len - bytesRead);
-            //} while (bytesRead < len);
+            await port.InputStream.ReadAsync(readData.AsBuffer(), (uint) len, InputStreamOptions.None);
 
             s = string.Join(" ", readData.Select(p => string.Format("0x{0}", p.ToString("X"))));
             _Logger.Debug(string.Format("Recv: {0} ({1})", s, ToDec(readData)));
@@ -210,8 +211,6 @@ namespace HeizungBackgroundApp.Viessmann
                         byte[] ack = new byte[1] { 0x01 };
                         await port.OutputStream.WriteAsync(ack.AsBuffer());
                         //await port.OutputStream.FlushAsync();  // Method not implemented ;)
-
-                        //await DiscardInput(port);
                         return;
                     }
                     await Task.Delay(1000);
@@ -222,7 +221,46 @@ namespace HeizungBackgroundApp.Viessmann
                 _Logger.Error(exp);
             }
         }
-        
+
+        //private async Task WaitForProtocol300Async(SerialDevice port, CancellationToken cancel)
+        //{
+        //    try
+        //    {
+        //        // Discrad any data in the queu...
+        //        await DiscardInputStreamAsync(port);
+
+        //        // First send "0x04" to reset to normal communication
+        //        byte[] resetCom = new byte[] { 0x01 };
+        //        await port.OutputStream.WriteAsync(resetCom.AsBuffer());
+        //        while(cancel.IsCancellationRequested == false)
+        //        {
+        //            // Wait for 0x05
+        //            var buffer = new Windows.Storage.Streams.Buffer(1);
+        //            var buf = await port.InputStream.ReadAsync(buffer, 1, InputStreamOptions.None);
+        //            if (buf.Length == 1 && buf.ToArray()[0] == 0x05)
+        //            {
+        //                // acknowledge this by sending 0x01
+        //                byte[] ack = new byte[] { 0x16, 0x00, 0x00 };
+        //                await port.OutputStream.WriteAsync(ack.AsBuffer());
+
+        //                var buffer2 = new Windows.Storage.Streams.Buffer(1);
+        //                var buf2 = await port.InputStream.ReadAsync(buffer2, 1, InputStreamOptions.None);
+        //                if (buf2.Length == 1 && buf.ToArray()[0] == 0x06)
+        //                {
+
+        //                }
+
+
+        //            }
+        //            await Task.Delay(1000);
+        //        }
+        //    }
+        //    catch (Exception exp)
+        //    {
+        //        _Logger.Error(exp);
+        //    }
+        //}
+
         private async Task<SerialDevice> OpenPortAsync(string id)
         {
             SerialDevice dev = await SerialDevice.FromIdAsync(id);
