@@ -100,6 +100,14 @@
     <Compile Include="FileHelper.cs" />
     <Compile Include="Heizung.cs" />
     <Compile Include="ILog.cs" />
+    <Compile Include="LightBuzz.SMTP\EmailClient.cs" />
+    <Compile Include="LightBuzz.SMTP\MailBox.cs" />
+    <Compile Include="LightBuzz.SMTP\SmtpClient.cs" />
+    <Compile Include="LightBuzz.SMTP\SmtpCode.cs" />
+    <Compile Include="LightBuzz.SMTP\SmtpMessage.cs" />
+    <Compile Include="LightBuzz.SMTP\SmtpPriority.cs" />
+    <Compile Include="LightBuzz.SMTP\SmtpResponse.cs" />
+    <Compile Include="LightBuzz.SMTP\SmtpSocket.cs" />
     <Compile Include="Logging.cs" />
     <Compile Include="OnlineCheck.cs" />
     <Compile Include="OnlineCheckConfig.cs" />

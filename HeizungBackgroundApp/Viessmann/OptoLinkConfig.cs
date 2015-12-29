@@ -35,7 +35,7 @@ namespace HeizungBackgroundApp.Viessmann
             }
         }
 
-        internal async Task Save(StorageFolder folder, string fileName)
+        internal async Task SaveAsync(StorageFolder folder, string fileName)
         {
             var file = await folder.CreateFileAsync(fileName, CreationCollisionOption.ReplaceExisting);
             using (var stream = await file.OpenAsync(FileAccessMode.ReadWrite))
@@ -65,6 +65,27 @@ namespace HeizungBackgroundApp.Viessmann
         public string Folder { get; set; }
 
         public string FileNamePattern { get; set; }
+
+        public OptoLinkAlarmSmtp AlarmSmtp { get; set; }
+    }
+
+    public sealed class OptoLinkAlarmSmtp
+    {
+        public string Server { get; set; }
+
+        public int Port { get; set; }
+
+        public bool Ssl { get; set; }
+
+        public string Username { get; set; }
+
+        public string Password { get; set; }
+
+        public string From { get; set; }
+
+        public string To { get; set; }
+
+        public string Subject { get; set; }
     }
 
     public sealed class OptoLinkConfigEntry
@@ -134,7 +155,7 @@ namespace HeizungBackgroundApp.Viessmann
                         dec = dec - 6553.5M;
                 }
 
-                return dec.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return dec.ToString(CultureInfo.InvariantCulture);
             }
             if (string.Equals(Format, "hhmmss", StringComparison.OrdinalIgnoreCase))
             {
@@ -156,5 +177,46 @@ namespace HeizungBackgroundApp.Viessmann
         public string Chart { get; set; }
 
         public string ChartY { get; set; }
+
+        /// <summary>
+        /// If the read valus is greater or equal than this value, an alarm is send via Smtp
+        /// </summary>
+        public double? AlarmHi { get; set; }
+
+        /// <summary>
+        /// If the read valus is lower or equal than this value, an alarm is send via Smtp
+        /// </summary>
+        public double? AlarmLo { get; set; }
+
+        public bool IsAlarmActive(string val, out string alarmText)
+        {
+            alarmText = null;
+            if (AlarmHi == null && AlarmLo == null)
+            {
+                return false;
+            }
+            IConvertible conv = val as IConvertible;
+            if (conv != null)
+            {
+                try
+                {
+                    double dbl = conv.ToDouble(CultureInfo.InvariantCulture);
+                    if (AlarmHi != null && dbl >= AlarmHi.Value)
+                    {
+                        alarmText = string.Format("AlarmHi reached: {0}, current value: {1}, alarm value: {2}",
+                            Text, val, AlarmHi.Value);
+                        return true;
+                    }
+                    if (AlarmLo != null && dbl <= AlarmLo.Value)
+                    {
+                        alarmText = string.Format("AlarmLo reached: {0}, current value: {1}, alarm value: {2}",
+                            Text, val, AlarmLo.Value);
+                        return true;
+                    }
+                }
+                catch { }
+            }
+            return false;
+        }
     }
 }

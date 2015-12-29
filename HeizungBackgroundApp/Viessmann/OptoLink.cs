@@ -33,15 +33,15 @@ namespace HeizungBackgroundApp.Viessmann
             {
                 try
                 {
-                    using (var port = await OpenPort(_Device))
+                    using (var port = await OpenPortAsync(_Device))
                     {
                         port.ReadTimeout = new TimeSpan(0, 0, 0, 0, 500);
 
                         while (cancel.IsCancellationRequested == false)
                         {
-                            await DiscardInputStream(port);
+                            await DiscardInputStreamAsync(port);
 
-                            await WaitFor0x05(port, cancel);
+                            await WaitFor0x05Async(port, cancel);
 
                             // Reduce now read timeout
                             port.ReadTimeout = new TimeSpan(0, 0, 0, 0, 500);  // 500 ms
@@ -54,8 +54,12 @@ namespace HeizungBackgroundApp.Viessmann
                             foreach (OptoLinkConfigEntry ce in cfg.Values)
                             {
                                 sb.Append("\t");
-                                var readData = await ReadData(port, ce.AddressAsInt, ce.Len);
+                                var readData = await ReadDataAsync(port, ce.AddressAsInt, ce.Len);
+                                string val = ce.GetDataString(readData);
                                 sb.Append(ce.GetDataString(readData));
+
+                                // Info: Do not wait for the sending of the e-mail...
+                                Task t = CheckAlarm(cfg, ce, val);
 
                                 if (sw.ElapsedMilliseconds > 5000)
                                 {
@@ -73,7 +77,7 @@ namespace HeizungBackgroundApp.Viessmann
                             _Logger.Debug(sb.ToString());
 
                             // Log into file...
-                            var fld = await GetFolder(dt, null);
+                            var fld = await GetFolderAsync(dt, null);
                             string fn = string.Format(cfg.FileNamePattern, dt);
                             // Create file with headlines, if not yet existing
                             if (System.IO.File.Exists(System.IO.Path.Combine(fld.Path, fn)) == false)
@@ -109,13 +113,53 @@ namespace HeizungBackgroundApp.Viessmann
             }
         }
 
-        private async Task DiscardInputStream(SerialDevice port)
+        private List<OptoLinkConfigEntry> _ActiveAlarmEntries = new List<OptoLinkConfigEntry>();
+        private async Task CheckAlarm(OptoLinkConfig cfg, OptoLinkConfigEntry ce, string val)
+        {
+            if (cfg.AlarmSmtp == null)
+            {
+                return;
+            }
+            string errText;
+            if (ce.IsAlarmActive(val, out errText))
+            {
+                if (_ActiveAlarmEntries.Contains(ce) == false)
+                {
+                    // Add to active list
+                    _ActiveAlarmEntries.Add(ce);
+                    // Send E-Mail...
+                    var client = new LightBuzz.SMTP.EmailClient
+                    {
+                        Server = cfg.AlarmSmtp.Server,
+                        Port = cfg.AlarmSmtp.Port,
+                        Username = cfg.AlarmSmtp.Username,
+                        Password = cfg.AlarmSmtp.Password,
+                        From = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.From, cfg.AlarmSmtp.From),
+                        To = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.To, cfg.AlarmSmtp.To),
+                        SSL = cfg.AlarmSmtp.Ssl,
+                        Subject = cfg.AlarmSmtp.Subject,
+                        Message = errText
+                    };
+                    await client.SendAsync();
+                }
+            }
+            else
+            {
+                if (_ActiveAlarmEntries.Contains(ce))
+                {
+                    // Remove from active list
+                    _ActiveAlarmEntries.Remove(ce);
+                }
+            }
+        }
+
+        private async Task DiscardInputStreamAsync(SerialDevice port)
         {
             var b = new byte[100].AsBuffer();
             var b2 = await port.InputStream.ReadAsync(b, 100, InputStreamOptions.Partial);
         }
 
-        private async Task<byte[]> ReadData(SerialDevice port, int addr, int len)
+        private async Task<byte[]> ReadDataAsync(SerialDevice port, int addr, int len)
         {
             byte[] data = new byte[] { 0xF7, 0x00, 0x00, 0x10 };
             data[1] = (byte)((addr >> 8) & 0xFF);
@@ -152,7 +196,7 @@ namespace HeizungBackgroundApp.Viessmann
             return ((decimal)i) / 10;
         }
 
-        private async Task WaitFor0x05(SerialDevice port, CancellationToken cancel)
+        private async Task WaitFor0x05Async(SerialDevice port, CancellationToken cancel)
         {
             var buffer = new Windows.Storage.Streams.Buffer(1);
             try
@@ -179,7 +223,7 @@ namespace HeizungBackgroundApp.Viessmann
             }
         }
         
-        private async Task<SerialDevice> OpenPort(string id)
+        private async Task<SerialDevice> OpenPortAsync(string id)
         {
             SerialDevice dev = await SerialDevice.FromIdAsync(id);
             dev.BaudRate = 4800;
@@ -193,12 +237,12 @@ namespace HeizungBackgroundApp.Viessmann
 
         private async Task<OptoLinkConfig> LoadConfigAsync()
         {
-            var folder = await GetFolder(null, null);
+            var folder = await GetFolderAsync(null, null);
             var cfg = await OptoLinkConfig.LoadAsync(folder, "Heizung.config.json");
             return cfg;
         }
 
-        private async Task<StorageFolder> GetFolder(DateTime? dt, string folder)
+        private async Task<StorageFolder> GetFolderAsync(DateTime? dt, string folder)
         {
             var fld = await ApplicationData.Current.LocalFolder.CreateFolderAsync("Heizung", CreationCollisionOption.OpenIfExists);
             if (string.IsNullOrEmpty(folder) == false)

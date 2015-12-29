@@ -17,7 +17,7 @@ namespace HeizungBackgroundApp
 
         private async Task<OnlineCheckConfig> LoadConfigAsync()
         {
-            var folder = await GetFolder(null, null);
+            var folder = await GetFolderAsync(null, null);
             var cfg = await OnlineCheckConfig.LoadAsync(folder, "OnlineCheck.config.xml");
             return cfg;
         }
@@ -41,11 +41,11 @@ namespace HeizungBackgroundApp
             while (cancel.IsCancellationRequested == false)
             {
                 sw.Restart();
-                if (await IsOnline(checkEntry))
+                if (await IsOnlineAsync(checkEntry))
                 {
                     var dt = DateTime.Now;
                     string text = string.Format(checkEntry.LogPattern, dt) + Environment.NewLine;
-                    var fld = await GetFolder(dt, checkEntry.Folder);
+                    var fld = await GetFolderAsync(dt, checkEntry.Folder);
                     await FileHelper.AppendAllTextAsync(fld, GetFileName(dt, checkEntry), text);
                 }
                 // Try to almost exactly match the _WaitTime
@@ -56,7 +56,7 @@ namespace HeizungBackgroundApp
             }
         }
 
-        private async Task<StorageFolder> GetFolder(DateTime? dt, string folder)
+        private async Task<StorageFolder> GetFolderAsync(DateTime? dt, string folder)
         {
             var fld = await ApplicationData.Current.LocalFolder.CreateFolderAsync("OnlineCheck", Windows.Storage.CreationCollisionOption.OpenIfExists);
             if (string.IsNullOrEmpty(folder) == false)
@@ -76,7 +76,7 @@ namespace HeizungBackgroundApp
             return string.Format(checkEntry.FileNamePattern, dt);
         }
 
-        private async Task<bool> IsOnline(OnlineCheckConfigEntry checkEntry)
+        private async Task<bool> IsOnlineAsync(OnlineCheckConfigEntry checkEntry)
         {
             try
             {
