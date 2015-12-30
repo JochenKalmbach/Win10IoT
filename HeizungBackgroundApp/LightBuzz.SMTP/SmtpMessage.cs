@@ -305,10 +305,10 @@ namespace LightBuzz.SMTP
                 }
                 else
                 {
-                    sb.AppendFormat("\"{0}\"<{1}>", mb.Name, mb.EmailAddress);
+                    sb.AppendFormat("\"{0}\"<{1}>", EncodeHeaderText(mb.Name), mb.EmailAddress);
                 }
             }
-            return EncodeHeaderText(sb.ToString());
+            return sb.ToString();
         }
 
         private static string EncodeHeaderText(string text)
