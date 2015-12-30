@@ -13,6 +13,8 @@ namespace HeizungBackgroundApp.Viessmann
         public OptoLinkConfig()
         {
             IntervallInSec = 10;
+            Max0x05TimeMilliseconds = 500;
+            Max0x05Requests = 12;
         }
 
         internal static async Task<OptoLinkConfig> LoadAsync(StorageFolder folder, string fileName)
@@ -58,9 +60,15 @@ namespace HeizungBackgroundApp.Viessmann
             get { return _Values; }
         }
 
+        public string Description { get; set; }
+
         public string Device { get; set; }
 
         public int IntervallInSec { get; set; }
+
+        public int Max0x05TimeMilliseconds { get; set; }
+
+        public int Max0x05Requests { get; set; }
 
         public string Folder { get; set; }
 

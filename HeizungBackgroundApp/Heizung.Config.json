@@ -1,7 +1,9 @@
 {
   "Description": "Vitoladens 300-C",
   "IntervallInSec": 10,
-  "Folder": "Heizung",
+  "Max0x05TimeMilliseconds": 500,
+  "Max0x05Requests": 12,
+  "Folder": "{0:yyyy}",
   "FileNamePattern": "{0:yyyy-MM-dd}.txt",
   "AlarmSmtp": {
     "Server": "smtp.1und1.de",
@@ -125,12 +127,6 @@
       "DecPlaces": 0,
       "Len": 1,
       "AlarmHi": 0.1
-    },
-    {
-      "Text": "Fehlercode GFA",
-      "Address": "0x5738",
-      "DecPlaces": 0,
-      "Len": 1
     }
   ]
 }

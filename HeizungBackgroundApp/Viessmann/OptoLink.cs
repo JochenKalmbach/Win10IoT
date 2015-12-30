@@ -53,8 +53,10 @@ namespace HeizungBackgroundApp.Viessmann
                             var sb = new StringBuilder();
                             sb.AppendFormat(System.Globalization.CultureInfo.InvariantCulture, "{0:HH:mm:ss}", dt);
                             bool doBreak = false;
+                            int reqCnt = 0;
                             foreach (OptoLinkConfigEntry ce in cfg.Values)
                             {
+                                reqCnt++;
                                 sb.Append("\t");
                                 var readData = await ReadDataAsync(port, ce.AddressAsInt, ce.Len);
                                 string val = ce.GetDataString(readData);
@@ -64,13 +66,14 @@ namespace HeizungBackgroundApp.Viessmann
                                 Task t = CheckAlarm(cfg, ce, val);
 
                                 // When using the KW protocol, we must not wait longer than about 750-950 ms... then we must first wait for the next 0x05...
-                                if (swInner.ElapsedMilliseconds > 750)
+                                if ((reqCnt > cfg.Max0x05Requests) || (swInner.ElapsedMilliseconds > Math.Min(750, cfg.Max0x05TimeMilliseconds)))
                                 {
                                     _Logger.Debug("... interrupting: waiting for next 0x05...");
                                     await WaitFor0x05Async(port, cancel);
                                     swInner.Restart();
+                                    reqCnt = 0;
                                 }
-                                if (sw.ElapsedMilliseconds > 5000)
+                                if (sw.ElapsedMilliseconds > 10000)
                                 {
                                     // if the delay was too much, then discad this data...
                                     _Logger.Debug(string.Format("Delay was too much ({0} ms)!", sw.ElapsedMilliseconds));
@@ -86,7 +89,7 @@ namespace HeizungBackgroundApp.Viessmann
                             _Logger.Debug(sb.ToString());
 
                             // Log into file...
-                            var fld = await GetFolderAsync(dt, null);
+                            var fld = await GetFolderAsync(dt, cfg.Folder);
                             string fn = string.Format(cfg.FileNamePattern, dt);
                             // Create file with headlines, if not yet existing
                             if (System.IO.File.Exists(System.IO.Path.Combine(fld.Path, fn)) == false)
@@ -122,7 +125,7 @@ namespace HeizungBackgroundApp.Viessmann
             }
         }
 
-        private List<OptoLinkConfigEntry> _ActiveAlarmEntries = new List<OptoLinkConfigEntry>();
+        private Dictionary<OptoLinkConfigEntry, string> _ActiveAlarmEntries = new Dictionary<OptoLinkConfigEntry, string>();
         private async Task CheckAlarm(OptoLinkConfig cfg, OptoLinkConfigEntry ce, string val)
         {
             if (cfg.AlarmSmtp == null)
@@ -132,10 +135,10 @@ namespace HeizungBackgroundApp.Viessmann
             string errText;
             if (ce.IsAlarmActive(val, out errText))
             {
-                if (_ActiveAlarmEntries.Contains(ce) == false)
+                if (_ActiveAlarmEntries.ContainsKey(ce) == false)
                 {
                     // Add to active list
-                    _ActiveAlarmEntries.Add(ce);
+                    _ActiveAlarmEntries.Add(ce, errText);
                     // Send E-Mail...
                     var client = new LightBuzz.SMTP.EmailClient
                     {
@@ -146,7 +149,7 @@ namespace HeizungBackgroundApp.Viessmann
                         From = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.From, cfg.AlarmSmtp.From),
                         To = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.To, cfg.AlarmSmtp.To),
                         SSL = cfg.AlarmSmtp.Ssl,
-                        Subject = cfg.AlarmSmtp.Subject,
+                        Subject = "Comming: " + cfg.AlarmSmtp.Subject,
                         Message = errText
                     };
                     await client.SendAsync();
@@ -154,10 +157,26 @@ namespace HeizungBackgroundApp.Viessmann
             }
             else
             {
-                if (_ActiveAlarmEntries.Contains(ce))
+                if (_ActiveAlarmEntries.ContainsKey(ce))
                 {
+                    // get the old error text...
+                    errText = _ActiveAlarmEntries[ce];
                     // Remove from active list
                     _ActiveAlarmEntries.Remove(ce);
+                    // Send E-Mail...
+                    var client = new LightBuzz.SMTP.EmailClient
+                    {
+                        Server = cfg.AlarmSmtp.Server,
+                        Port = cfg.AlarmSmtp.Port,
+                        Username = cfg.AlarmSmtp.Username,
+                        Password = cfg.AlarmSmtp.Password,
+                        From = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.From, cfg.AlarmSmtp.From),
+                        To = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.To, cfg.AlarmSmtp.To),
+                        SSL = cfg.AlarmSmtp.Ssl,
+                        Subject = "Going: " + cfg.AlarmSmtp.Subject,
+                        Message = errText
+                    };
+                    await client.SendAsync();
                 }
             }
         }
