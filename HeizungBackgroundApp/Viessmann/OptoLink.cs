@@ -23,12 +23,21 @@ namespace HeizungBackgroundApp.Viessmann
 
         private string _Device;
 
+        class ReadData
+        {
+            public DateTime DateTime;
+            public List<ReadEntry> Entries = new List<ReadEntry>();
+        }
+        class ReadEntry
+        {
+            public OptoLinkConfigEntry ConfigEntry;
+            public string Data;
+        }
+
         internal async Task DoWorkAsync(CancellationToken cancel)
         {
             var cfg = await LoadConfigAsync();
 
-            var sw = Stopwatch.StartNew();
-            var swInner = Stopwatch.StartNew();
             //await WaitForFirst
             while (cancel.IsCancellationRequested == false)
             {
@@ -40,75 +49,15 @@ namespace HeizungBackgroundApp.Viessmann
 
                         while (cancel.IsCancellationRequested == false)
                         {
-                            await DiscardInputStreamAsync(port);
-
-                            await WaitFor0x05Async(port, cancel);
-
-                            // Reduce now read timeout
-                            port.ReadTimeout = new TimeSpan(0, 0, 0, 0, 500);  // 500 ms
-
-                            sw.Restart();
-                            swInner.Restart();
-                            DateTime dt = DateTime.Now;
-                            var sb = new StringBuilder();
-                            sb.AppendFormat(System.Globalization.CultureInfo.InvariantCulture, "{0:HH:mm:ss}", dt);
-                            bool doBreak = false;
-                            int reqCnt = 0;
-                            foreach (OptoLinkConfigEntry ce in cfg.Values)
+                            var sw = Stopwatch.StartNew();
+                            ReadData data = await ReadDataAsync(port, cfg, cancel);
+                            if (data != null)
                             {
-                                reqCnt++;
-                                sb.Append("\t");
-                                var readData = await ReadDataAsync(port, ce.AddressAsInt, ce.Len);
-                                string val = ce.GetDataString(readData);
-                                sb.Append(ce.GetDataString(readData));
+                                // Do not wait until all emails are sned...
+                                Task t = CheckAlarms(cfg, data);
 
-                                // Info: Do not wait for the sending of the e-mail...
-                                Task t = CheckAlarm(cfg, ce, val);
-
-                                // When using the KW protocol, we must not wait longer than about 750-950 ms... then we must first wait for the next 0x05...
-                                if ((reqCnt > cfg.Max0x05Requests) || (swInner.ElapsedMilliseconds > Math.Min(750, cfg.Max0x05TimeMilliseconds)))
-                                {
-                                    _Logger.Debug("... interrupting: waiting for next 0x05...");
-                                    await WaitFor0x05Async(port, cancel);
-                                    swInner.Restart();
-                                    reqCnt = 0;
-                                }
-                                if (sw.ElapsedMilliseconds > 10000)
-                                {
-                                    // if the delay was too much, then discad this data...
-                                    _Logger.Debug(string.Format("Delay was too much ({0} ms)!", sw.ElapsedMilliseconds));
-                                    doBreak = true;
-                                    break;
-                                }
+                                await LogToFile(cfg, data);
                             }
-                            if (doBreak)
-                            {
-                                continue;
-                            }
-                            sb.AppendLine();
-                            _Logger.Debug(sb.ToString());
-
-                            // Log into file...
-                            var fld = await GetFolderAsync(dt, cfg.Folder);
-                            string fn = string.Format(cfg.FileNamePattern, dt);
-                            // Create file with headlines, if not yet existing
-                            if (System.IO.File.Exists(System.IO.Path.Combine(fld.Path, fn)) == false)
-                            {
-                                var sb2 = new StringBuilder();
-                                sb2.AppendFormat("DateTime");
-                                foreach (var ce in cfg.Values)
-                                {
-                                    sb2.Append("\t");
-                                    if (string.IsNullOrEmpty(ce.Text))
-                                        sb2.Append("0x" + ce.AddressAsInt.ToString("X"));
-                                    else
-                                        sb2.Append(ce.Text.Replace('\t', '?'));
-                                }
-                                sb2.AppendLine();
-                                await FileHelper.AppendAllTextAsync(fld, fn, sb2.ToString());
-                            }
-                            await FileHelper.AppendAllTextAsync(fld, fn, sb.ToString());
-
                             // Try to almost exactly match the _WaitTime
                             int waitTime = cfg.IntervallInSec * 1000 - (int)sw.ElapsedMilliseconds;
                             if (waitTime < 500)
@@ -125,7 +74,96 @@ namespace HeizungBackgroundApp.Viessmann
             }
         }
 
-        private Dictionary<OptoLinkConfigEntry, string> _ActiveAlarmEntries = new Dictionary<OptoLinkConfigEntry, string>();
+        private async Task LogToFile(OptoLinkConfig cfg, ReadData data)
+        {
+            // Logging to file...
+            var sb = new StringBuilder();
+            sb.AppendFormat(System.Globalization.CultureInfo.InvariantCulture, "{0:HH:mm:ss}", data.DateTime);
+            foreach (ReadEntry re in data.Entries)
+            {
+                sb.Append("\t");
+                sb.Append(re.Data);
+            }
+            sb.AppendLine();
+            _Logger.Debug(sb.ToString());
+
+            // Log into file...
+            var fld = await GetFolderAsync(data.DateTime, cfg.Folder);
+            string fn = string.Format(cfg.FileNamePattern, data.DateTime);
+            // Create file with headlines, if not yet existing
+            if (System.IO.File.Exists(System.IO.Path.Combine(fld.Path, fn)) == false)
+            {
+                var sb2 = new StringBuilder();
+                sb2.AppendFormat("DateTime");
+                foreach (var ce in cfg.Values)
+                {
+                    sb2.Append("\t");
+                    if (string.IsNullOrEmpty(ce.Text))
+                        sb2.Append("0x" + ce.AddressAsInt.ToString("X"));
+                    else
+                        sb2.Append(ce.Text.Replace('\t', '?'));
+                }
+                sb2.AppendLine();
+                await FileHelper.AppendAllTextAsync(fld, fn, sb2.ToString());
+            }
+            await FileHelper.AppendAllTextAsync(fld, fn, sb.ToString());
+        }
+
+        private async Task<ReadData> ReadDataAsync(SerialDevice port, OptoLinkConfig cfg, CancellationToken cancel)
+        {
+            var res = new ReadData();
+
+            await DiscardInputStreamAsync(port);
+
+            await WaitFor0x05Async(port, cancel);
+
+            var sw = Stopwatch.StartNew();
+            var swInner = Stopwatch.StartNew();
+            res.DateTime = DateTime.Now;
+            int reqCnt = 0;
+            foreach (OptoLinkConfigEntry ce in cfg.Values)
+            {
+                reqCnt++;
+                ReadEntry re = new ReadEntry();
+                re.ConfigEntry = ce;
+                var readData = await ReadDataAsync(port, ce.AddressAsInt, ce.Len);
+                re.Data = ce.GetDataString(readData);
+                res.Entries.Add(re);
+
+                // When using the KW protocol, we must not wait longer than about 750-950 ms... then we must first wait for the next 0x05...
+                if ((reqCnt > cfg.Max0x05Requests) || (swInner.ElapsedMilliseconds > Math.Min(750, cfg.Max0x05TimeMilliseconds)))
+                {
+                    _Logger.Debug("... interrupting: waiting for next 0x05...");
+                    await WaitFor0x05Async(port, cancel);
+                    swInner.Restart();
+                    reqCnt = 0;
+                }
+                if (sw.ElapsedMilliseconds > 10000)
+                {
+                    // if the delay was too much, then discad this data...
+                    _Logger.Debug(string.Format("Delay was too much ({0} ms)!", sw.ElapsedMilliseconds));
+                    return null;
+                }
+            }
+            return res;
+        }
+
+        private async Task CheckAlarms(OptoLinkConfig cfg, ReadData data)
+        {
+            // Logging to file...
+            foreach (ReadEntry re in data.Entries)
+            {
+                await CheckAlarm(cfg, re.ConfigEntry, re.Data);
+            }
+        }
+
+        class AlarmEntry
+        {
+            public string ErrText;
+            public int ErrCount;
+            public bool MailSent;
+        }
+        private Dictionary<OptoLinkConfigEntry, AlarmEntry> _ActiveAlarmEntries = new Dictionary<OptoLinkConfigEntry, AlarmEntry>();
         private async Task CheckAlarm(OptoLinkConfig cfg, OptoLinkConfigEntry ce, string val)
         {
             if (cfg.AlarmSmtp == null)
@@ -135,10 +173,19 @@ namespace HeizungBackgroundApp.Viessmann
             string errText;
             if (ce.IsAlarmActive(val, out errText))
             {
+                _Logger.Debug(string.Format("Alarm active: {0}", errText));
                 if (_ActiveAlarmEntries.ContainsKey(ce) == false)
                 {
                     // Add to active list
-                    _ActiveAlarmEntries.Add(ce, errText);
+                    _ActiveAlarmEntries.Add(ce, new AlarmEntry { ErrText = errText });
+                }
+
+                var ae = _ActiveAlarmEntries[ce];
+                ae.ErrCount++;
+                if (ae.MailSent == false && ae.ErrCount > ce.AlarmHiDelayCount)
+                {
+                    _Logger.Debug(string.Format("Alarm active (sending email): {0}", errText));
+                    ae.MailSent = true;
                     // Send E-Mail...
                     var client = new LightBuzz.SMTP.EmailClient
                     {
@@ -159,24 +206,30 @@ namespace HeizungBackgroundApp.Viessmann
             {
                 if (_ActiveAlarmEntries.ContainsKey(ce))
                 {
-                    // get the old error text...
-                    errText = _ActiveAlarmEntries[ce];
+                    _Logger.Debug(string.Format("Alarm deactiveated: {0}", errText));
+                    // get the old error entry...
+                    var ae = _ActiveAlarmEntries[ce];
+
                     // Remove from active list
                     _ActiveAlarmEntries.Remove(ce);
-                    // Send E-Mail...
-                    var client = new LightBuzz.SMTP.EmailClient
+                    // Send "going" E-Mail...
+                    if (ae.MailSent)
                     {
-                        Server = cfg.AlarmSmtp.Server,
-                        Port = cfg.AlarmSmtp.Port,
-                        Username = cfg.AlarmSmtp.Username,
-                        Password = cfg.AlarmSmtp.Password,
-                        From = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.From, cfg.AlarmSmtp.From),
-                        To = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.To, cfg.AlarmSmtp.To),
-                        SSL = cfg.AlarmSmtp.Ssl,
-                        Subject = "Going: " + cfg.AlarmSmtp.Subject,
-                        Message = errText
-                    };
-                    await client.SendAsync();
+                        _Logger.Debug(string.Format("Alarm deactiveated (sending email): {0}", errText));
+                        var client = new LightBuzz.SMTP.EmailClient
+                        {
+                            Server = cfg.AlarmSmtp.Server,
+                            Port = cfg.AlarmSmtp.Port,
+                            Username = cfg.AlarmSmtp.Username,
+                            Password = cfg.AlarmSmtp.Password,
+                            From = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.From, cfg.AlarmSmtp.From),
+                            To = new LightBuzz.SMTP.MailBox(cfg.AlarmSmtp.To, cfg.AlarmSmtp.To),
+                            SSL = cfg.AlarmSmtp.Ssl,
+                            Subject = "Going: " + cfg.AlarmSmtp.Subject,
+                            Message = ae.ErrText
+                        };
+                        await client.SendAsync();
+                    }
                 }
             }
         }

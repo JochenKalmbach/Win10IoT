@@ -191,10 +191,14 @@ namespace HeizungBackgroundApp.Viessmann
         /// </summary>
         public double? AlarmHi { get; set; }
 
+        public int AlarmHiDelayCount { get; set; }
+
         /// <summary>
         /// If the read valus is lower or equal than this value, an alarm is send via Smtp
         /// </summary>
         public double? AlarmLo { get; set; }
+
+        public int AlarmLoDelayCount { get; set; }
 
         public bool IsAlarmActive(string val, out string alarmText)
         {
