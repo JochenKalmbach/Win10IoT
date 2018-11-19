@@ -36,6 +36,7 @@ namespace HeizungBackgroundApp
             catch(Exception exp)
             {
                 _Logger.Error(exp);
+                throw;
             }
 
         }

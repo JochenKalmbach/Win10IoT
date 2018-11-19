@@ -9,6 +9,7 @@ namespace HeizungBackgroundApp
 {
     /// <summary>
     /// TODO: Logging with ETW... 
+    /// http://gunnarpeipman.com/2016/11/iot-etw-trace/
     /// </summary>
     internal class Logging : ILog
     {
@@ -31,6 +32,7 @@ namespace HeizungBackgroundApp
 
         public void Error(Exception exp)
         {
+            _EvtSource.Write(exp.ToString(), new EventSourceOptions() { Level = EventLevel.Error, Opcode = EventOpcode.Info });
             System.Diagnostics.Debug.WriteLine(exp);
         }
 

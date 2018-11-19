@@ -37,6 +37,8 @@ namespace HeizungBackgroundApp.Viessmann
         internal async Task DoWorkAsync(CancellationToken cancel)
         {
             var cfg = await LoadConfigAsync();
+            int errCnt = 0;
+            int testCnt = 0;
 
             //await WaitForFirst
             while (cancel.IsCancellationRequested == false)
@@ -68,6 +70,11 @@ namespace HeizungBackgroundApp.Viessmann
                 }
                 catch (Exception exp)
                 {
+                    errCnt++;
+                    if (errCnt > 10)
+                    {
+                        throw;
+                    }
                     _Logger.Error(exp);
                     await Task.Delay(10000);
                 }
@@ -291,6 +298,7 @@ namespace HeizungBackgroundApp.Viessmann
             catch(Exception exp)
             {
                 _Logger.Error(exp);
+                throw;
             }
         }
 
